@@ -4,7 +4,7 @@ querystring = require "querystring"
 
 process.env.HUBOT_CONCURRENT_REQUESTS ?= 20
 
-class Github
+class BitBucket
   constructor: (@logger) ->
     @requestQueue = async.queue (task, cb) =>
       task.run cb
@@ -12,25 +12,33 @@ class Github
   qualified_repo: (repo) ->
     unless repo?
       unless (repo = process.env.HUBOT_GITHUB_REPO)?
-        @logger.error "Default Github repo not specified"
+        @logger.error "Default BitBucket repo not specified"
         return null
     repo = repo.toLowerCase()
     return repo unless repo.indexOf("/") is -1
-    unless (user = process.env.HUBOT_GITHUB_USER)?
-      @logger.error "Default Github user not specified"
+    unless (user = process.env.HUBOT_BITBUCKET_USER)?
+      @logger.error "Default BitBucket user not specified"
       return repo
     "#{user}/#{repo}"
   request: (verb, url, data, cb) ->
     unless cb?
       [cb, data] = [data, null]
 
-    url_api_base = process.env.HUBOT_GITHUB_API || "https://api.github.com"
+    url_api_base = process.env.HUBOT_GITHUB_API || "https://api.bitbucket.org/1.0"
 
     if url[0..3] isnt "http"
       url = "/#{url}" unless url[0] is "/"
       url = "#{url_api_base}#{url}"
-    req = http.create(url).header("Accept", "application/vnd.github.beta+json")
-    req = req.header("Authorization", "token #{oauth_token}") if (oauth_token = process.env.HUBOT_GITHUB_TOKEN)?
+    req = http.create(url)
+    
+    unless (user = process.env.HUBOT_BITBUCKET_USER)?
+      @logger.error "Default BitBucket user not specified"
+    unless (password = process.env.HUBOT_BITBUCKET_PASSWORD)?
+      @logger.error "Default BitBucket password not specified"
+    authString = "#{user}:#{password}"
+
+    base64 = new Buffer(authString).toString('base64');
+    req = req.header("Authorization", "Basic #{base64}")
     args = []
     args.push JSON.stringify data if data?
     args.push "" if verb is "DELETE" and not data?
@@ -55,39 +63,19 @@ class Github
     @request "GET", url, cb
   post: (url, data, cb) ->
     @request "POST", url, data, cb
-  branches: (repo, cb) ->
-    if cb?
-      @get("https://api.github.com/repos/#{@qualified_repo repo}/branches", cb)
-    else
-      create: (branchName, opts, cb) =>
-        [opts,cb] = [{},opts] unless cb?
-        opts.from ?= "master"
-        @get "https://api.github.com/repos/#{@qualified_repo repo}/git/refs/heads/#{opts.from}", (json) =>
-          sha = json.object.sha
-          @post "https://api.github.com/repos/#{@qualified_repo repo}/git/refs",
-            ref: "refs/heads/#{branchName}", sha: sha
-            , (data) ->
-              cb name: branchName, commit: { sha: data.object.sha, url: data.object.url }
-      delete: (branchNames..., cb) =>
-        actions = []
-        for branchName in branchNames
-          do (branchName) =>
-            actions.push (done) =>
-              @request "DELETE", "https://api.github.com/repos/#{@qualified_repo repo}/git/refs/heads/#{branchName}", done
-        async.parallel actions, cb
 
-module.exports = github = (robot) ->
-  new Github robot.logger
+module.exports = bitbucket = (robot) ->
+  new BitBucket robot.logger
 
-github[method] = func for method,func of Github.prototype
+bitbucket[method] = func for method,func of BitBucket.prototype
 
-github.logger = {
+bitbucket.logger = {
   error: (msg) ->
     util = require "util"
     util.error "ERROR: #{msg}"
   debug: ->
 }
 
-github.requestQueue = async.queue (task, cb) =>
+bitbucket.requestQueue = async.queue (task, cb) =>
   task.run cb
 , process.env.HUBOT_CONCURRENT_REQUESTS
