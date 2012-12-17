@@ -2,7 +2,7 @@
 
 ## Install ##
 
-    npm install githubot
+    npm install hubucket
 
 ## Require ##
 
@@ -21,18 +21,11 @@ bitbucket = require('hubucket')
 
 ## Use ##
 
-Make any call to the Github v3 API, get the parsed JSON response:
+Make any call to the BitBucket v1.0 API, get the parsed JSON response:
 
 ```coffeescript
-github.get "https://api.github.com/users/iangreenleaf/gists", (gists) ->
-  console.log gists[0].description
-
-github.get "users/foo/repos", {type: "owner"}, (repos) ->
-  console.log repos[0].url
-
-data = { description: "A test gist", public: true, files: { "abc.txt": { content: "abcdefg" } } }
-github.post "gists", data, (gist) ->
-  console.log gist.url
+bitbucket.get 'repositories/pyro2927/evernote2box/events/' (data) ->
+    console.log data
 ```
 
 ## Authentication ##
